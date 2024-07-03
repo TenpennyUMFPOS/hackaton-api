@@ -1,50 +1,79 @@
 const Token = require('../models/Token');
 const jwt = require('jsonwebtoken');
+const Etudiant = require('../models/Etudiant');
+const Locker = require('../models/Locker');
 
-const SECRET_KEY = process.env.SECRET_KEY;
+const SECRET_KEY = process.env.SECRET_KEY; // Load your secret key from environment variable
 
 async function createToken(req, res) {
-    const { user_uid } = req.body;
-    if (!user_uid) {
-        return res.status(400).json({ error: 'user_uid is required' });
+    const { first_name, last_name, email } = req.body;
+    if (!first_name || !last_name || !email) {
+        return res.status(400).json({ error: 'first_name, last_name, and email are required' });
     }
-
-    const payload = { user_uid };
-    const token = jwt.sign(payload, SECRET_KEY, { expiresIn: '1h' });
 
     try {
-        console.log('Creating new token for user_uid:', user_uid);
-        const newToken = new Token({ user_uid: user_uid, token: token });
+        // Create a new student (etudiant)
+        const newEtudiant = new Etudiant({ first_name, last_name, email });
+        await newEtudiant.save();
+
+        console.log('New student created:', newEtudiant);
+
+        // Generate token for the new student
+        const payload = { user_id: newEtudiant._id };
+        const token = jwt.sign(payload, SECRET_KEY, { expiresIn: '1m' });
+
+        // Save the token to the token collection
+        const newToken = new Token({
+            user_uid: newEtudiant._id,
+            token: token,
+            expiryDate: new Date(Date.now() + 60 * 1000) // Set expiry 1 minute from now
+        });
         await newToken.save();
+
         console.log('Token saved successfully:', newToken);
-        res.json({ newToken });
+
+        // Create a new locker for the student
+        const newLocker = new Locker({
+            user_id: newEtudiant._id,
+        });
+        await newLocker.save();
+
+        console.log('Locker created successfully:', newLocker);
+
+        // Return the user_id (etudiant._id), locker_id (newLocker._id), and token
+        res.json({ user_uid: newEtudiant._id, locker_id: newLocker._id, token: token });
+
     } catch (error) {
-        console.error('Error saving token:', error);
-        res.status(500).json({ error: 'Error saving token' });
+        console.error('Error creating token:', error);
+        res.status(500).json({ error: 'Error creating token' });
     }
 }
-
-
 async function validateHash(req, res) {
     const { user_uid } = req.body;
     console.log('Received hash:', user_uid);
 
     try {
-        console.log('Searching for hash in the database...');
-        const hashEntry = await Token.findOne({ user_uid: user_uid });
-        console.log('Query result:', hashEntry);
+        console.log('Searching for token in the database...');
+        const token = await Token.findOne({ user_uid: user_uid });
 
-        if (hashEntry) {
-            console.log('Hash is valid.');
-            res.json({ valid: true });
-        } else {
-            console.log('Hash is invalid.');
-            res.json({ valid: false });
+        if (!token) {
+            console.log('Token not found.');
+            return res.json({ valid: false, expired: false });
         }
+
+        console.log('Token found:', token);
+
+        const currentTimestamp = new Date().getTime();
+        const isExpired = token.expiryDate && token.expiryDate.getTime() < currentTimestamp;
+
+        console.log(`Token ${isExpired ? 'expired' : 'valid and not expired'}.`);
+        res.json({ valid: true, expired: isExpired });
+
     } catch (error) {
-        console.error('Error validating hash:', error);
-        res.status(500).json({ valid: false });
+        console.error('Error validating token:', error);
+        res.status(500).json({ valid: false, expired: false, error: 'Internal Server Error' });
     }
 }
 
-module.exports = ({ createToken, validateHash }); 
+
+module.exports = { createToken, validateHash };
