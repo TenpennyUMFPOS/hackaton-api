@@ -3,8 +3,8 @@ require('dotenv').config();
 const app = express();
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
-const port = process.env.PORT || 7000; // Use process.env.PORT for Vercel compatibility
 const cors = require('cors');
+const port = process.env.PORT || 7000; // Use process.env.PORT for Vercel compatibility
 const jwt = require('jsonwebtoken');
 
 app.use(cors());
