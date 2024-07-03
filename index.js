@@ -27,10 +27,7 @@ db.once('open', () => console.log('Connected to database'));
 const tokenRoutes = require('./routes/tokenRoutes');
 app.use('/api', tokenRoutes); // Prefix routes with /api for better organization
 
-// Catch-all route for undefined endpoints
-app.use((req, res) => {
-    res.status(404).send('Sorry, the page you are looking for does not exist.');
-});
+
 
 // Start the server
 app.listen(port, () => {
